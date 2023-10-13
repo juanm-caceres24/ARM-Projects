@@ -1,6 +1,6 @@
 #include "LPC17xx.h"
 
-#define LED	(1<<28)	// -00010000000000000000000000000000-
+#define LED	(1<<28) // -00010000000000000000000000000000-
 
 void delay(uint32_t times);
 
@@ -9,10 +9,10 @@ int main(void) {
 	// PORT configuration
 
 	// PINSEL
-	LPC_PINCON->PINSEL1 &= ~(0x3<<24);	// set digital -11111100111111111111111111111111-
+	LPC_PINCON->PINSEL1 &= ~(0x3<<24); // set digital -11111100111111111111111111111111-
 
 	// FIODIR
-	LPC_GPIO0->FIODIR |= LED;	// set output -00010000000000000000000000000000-
+	LPC_GPIO0->FIODIR |= LED; // set output -00010000000000000000000000000000-
 
 	// main loop
 	while (1) {
