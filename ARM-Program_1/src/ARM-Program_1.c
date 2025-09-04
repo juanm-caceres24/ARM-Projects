@@ -23,7 +23,7 @@ void readPort();
 void setOutputHIGH();
 void setOutputLOW();
 
-static uint32_t RATIO = 100000;
+static uint32_t RATIO = 2000;
 static uint32_t duty_cycle;
 static uint32_t value;
 
@@ -45,23 +45,20 @@ int main(void) {
 }
 
 void configPorts() {
-	LPC_PINCON->PINSEL0 &= ~(3<<30);	// set P0.15 GPIO			0b00111111111111111111111111111111
-	LPC_PINCON->PINSEL1 &= ~(15<<0);	// set P0.16 & P0.17 GPIO	0b11111111111111111111111111110000
+	LPC_PINCON->PINSEL0 &= ~(3<<30);	// set P0.15 as GPIO		0b00111111111111111111111111111111
+	LPC_PINCON->PINSEL1 &= ~(3<<0);		// set P0.16 as GPIO		0b11111111111111111111111111111100
+	LPC_PINCON->PINSEL1 &= ~(3<<2);		// set P0.17 as GPIO		0b11111111111111111111111111110011
+	LPC_PINCON->PINSEL7 &= ~(3<<18);	// set P0.25 as GPIO		0b11111111111100111111111111111111
 
-	LPC_PINCON->PINMODE0 |= (3<<30);	// set P0.15 PULL-DOWN
-	//LPC_PINCON->PINMODE0 &= ~(3<<30);	// set P0.15 PULL-UP
+	LPC_PINCON->PINMODE0 &= ~(3<<30);	// set P0.15 with PULL-UP
+	LPC_PINCON->PINMODE1 &= ~(3<<0);	// set P0.16 with PULL-UP
+	LPC_PINCON->PINMODE1 &= ~(3<<2);	// set P0.17 with PULL-UP
+	LPC_PINCON->PINMODE7 &= ~(2<<18);	// set P0.25 neither PULL-UP nor PULL-DOWN
 
-	//LPC_PINCON->PINMODE1 |= (3<<0);	// set P0.16 PULL-DOWN
-	LPC_PINCON->PINMODE1 &= ~(3<<0);	// set P0.16 PULL-UP
-
-	//LPC_PINCON->PINMODE1 |= (3<<2);	// set P0.17 PULL-DOWN
-	LPC_PINCON->PINMODE1 &= ~(3<<2);	// set P0.17 PULL-UP
-
-	LPC_GPIO0->FIODIR &= ~(7<<15);		// set P0.15 & P0.16 & P0.17 INPUT
-
-	LPC_PINCON->PINSEL7 &= ~(3<<18);	// set P0.25 GPIO
-	LPC_PINCON->PINMODE7 &= ~(3<<18);	// set P0.25 PULL-UP
-	LPC_GPIO3->FIODIR |= (1<<25);		// set P0.25 OUTPUT
+	LPC_GPIO0->FIODIR &= ~(1<<15);		// set P0.15 as INPUT
+	LPC_GPIO0->FIODIR &= ~(1<<16);		// set P0.16 as INPUT
+	LPC_GPIO0->FIODIR &= ~(1<<17);		// set P0.17 as INPUT
+	LPC_GPIO3->FIODIR |= (1<<25);		// set P0.25 as OUTPUT
 }
 
 void delay(uint32_t delay){
