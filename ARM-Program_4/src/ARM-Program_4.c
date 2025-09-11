@@ -41,8 +41,8 @@ void configPorts();
 void configEINT();
 void configNVIC();
 void configSysTick();
-void updateWrite(void);
-void updateRead(void);
+void updateWrite();
+void updateRead();
 void toggleLED1();
 
 int main(void) {
@@ -195,7 +195,7 @@ void updateWrite() {
 }
 
 void updateRead() {
-	uint32_t value_tmp = *read_data_pointer & 0x1;
+	uint32_t value_tmp = *read_data_pointer & 0x01;
 	*read_data_pointer >>= 1;
 	if (value_tmp) {
 		LPC_GPIO2->FIOSET |= (1<<0);
@@ -217,10 +217,8 @@ void updateRead() {
 void toggleLED1() {
 	if (clock_led_status) {
 		LPC_GPIO2->FIOCLR = (1<<1);
-		clock_led_status = !clock_led_status;
 	} else {
 		LPC_GPIO2->FIOSET = (1<<1);
-		clock_led_status = !clock_led_status;
 	}
-
+	clock_led_status = !clock_led_status;
 }
