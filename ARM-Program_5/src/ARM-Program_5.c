@@ -67,6 +67,7 @@ int main() {
 		updateMotor0();
 		updateMotor1();
 	}
+	return 0;
 }
 
 /*
