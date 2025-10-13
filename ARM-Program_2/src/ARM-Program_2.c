@@ -48,7 +48,7 @@ void configPorts() {
 	LPC_PINCON->PINSEL4 |=  (1<<20);	// set P2.10 as EINT0
 	LPC_PINCON->PINSEL4 &= ~(3<<22);	// clear P2.11
 	LPC_PINCON->PINSEL4 |=  (1<<22);	// set P2.11 as EINT1
-	LPC_PINCON->PINSEL4 &= ~(3<<24);	// clear P2.11
+	LPC_PINCON->PINSEL4 &= ~(3<<24);	// clear P2.12
 	LPC_PINCON->PINSEL4 |=  (1<<24);	// set P2.12 as EINT2
 	LPC_PINCON->PINSEL4 &= ~(3<<0);		// set P2.0 as GPIO
 	LPC_PINCON->PINSEL4 &= ~(3<<2);		// set P2.1 as GPIO
