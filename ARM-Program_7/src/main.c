@@ -208,7 +208,7 @@ void SysTick_Handler() {
     }
 }
 
-void ADC_IRQHandler(){
+void ADC_IRQHandler() {
 	if (channel_selection == 0) {
 		potentiometer_0_value = ADC_ChannelGetData(LPC_ADC, ADC_CHANNEL_0) >> 2;
 		ADC_ChannelCmd(LPC_ADC, ADC_CHANNEL_0, DISABLE);

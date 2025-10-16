@@ -34,8 +34,8 @@ uint32_t static average_value;
 uint32_t static list_selection = 0;
 GPDMA_LLI_Type static adc_lli_0;
 GPDMA_LLI_Type static adc_lli_1;
-uint32_t static adc_buffer_0[GPDMA_BUFFER_SIZE] = {1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023};
-uint32_t static adc_buffer_1[GPDMA_BUFFER_SIZE] = {1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023,1023};
+uint32_t static adc_buffer_0[GPDMA_BUFFER_SIZE];
+uint32_t static adc_buffer_1[GPDMA_BUFFER_SIZE];
 
 void configADC();
 void configDAC();
