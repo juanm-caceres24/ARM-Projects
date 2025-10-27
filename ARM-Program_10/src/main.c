@@ -17,36 +17,29 @@
 #include<stdlib.h>
 #include<math.h>
 
+// MACROS
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define constrain(x, low, high) (((x) < (low)) ? (low) : (((x) > (high)) ? (high) : (x)))
 
-
-//#include "lpc17xx_adc.h"
-//#include "lpc17xx_dac.h"
-//#include "lpc17xx_exti.h"
-//#include "lpc17xx_gpdma.h"
-//#include "lpc17xx_gpio.h"
-//#include "lpc17xx_nvic.h"
-//#include "lpc17xx_pinsel.h"
-//#include "lpc17xx_systick.h"
-//#include "lpc17xx_timer.h"
-
 #include <cr_section_macros.h>
 
-// SYSTICK & TIMER
+// SysTick & Timer constants
 #define SYSTICK_TIME_IN_US 100 // 0.1[ms]
 #define TIMER_TIME_IN_US 100 // 0.1[ms]
 #define DEBOUNCE_DELAY_CYCLES 2000 // 200[ms]
 #define PWM_CYCLES 100 // Number of cycles (of TIME_IN_US) to consider a PWM cycle (100 * 0.1ms = 10ms)
 
+// General constants
 #define MAX_THROTTLE 64 // Maximum throttle level
 
+// PID 0 constants
 #define KP_0 0.03 // Proportional gain for the control algorithm
 #define KI_0 0.00035 // Integral gain for the control algorithm
 #define KD_0 0.000015 // Derivative gain for the control algorithm
 #define WINDUP_LIMIT_0 1000 // Integral windup limit for Motor 0
 
+// PID 1 constants
 #define KP_1 0.03 // Proportional gain for the control algorithm
 #define KI_1 0.00035 // Integral gain for the control algorithm
 #define KD_1 0.000015 // Derivative gain for the control algorithm
@@ -57,12 +50,6 @@ int static ldrValue_0;
 int static ldrValue_1;
 int static ldrValue_2;
 int static ldrValue_3;
-
-// GPDMA variables
-//GPDMA_LLI_Type static adcLLI_0;
-//GPDMA_LLI_Type static adcLLI_1;
-//uint32_t static adcBuffer_0[GPDMA_BUFFER_SIZE];
-//uint32_t static adcBuffer_1[GPDMA_BUFFER_SIZE];
 
 // General variables
 uint32_t static debounceCounter_0 = 0;
@@ -141,13 +128,13 @@ void configADC() {
 	LPC_PINCON->PINSEL3 &= ~(3 << 28); // Clear P1.30
 	LPC_PINCON->PINSEL3 |= (3 << 28); // Set P1.30 as AD0.4
 
-	LPC_SC->PCONP |= (1 << 12);
-	LPC_SC->PCLKSEL0 &= ~(3 << 24);
-	LPC_SC->PCLKSEL0 |= (3 << 24);
+	LPC_SC->PCONP |= (1 << 12); // Power up ADC
+	LPC_SC->PCLKSEL0 &= ~(3 << 24); // Clear PCLK_ADC
+	LPC_SC->PCLKSEL0 |= (3 << 24); // Set PCLK_ADC to CCLK/8
 	LPC_ADC->ADCR = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4) | (124 << 8) | (0 << 16) | (1 << 21);
-	LPC_ADC->ADINTEN = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4);
+	LPC_ADC->ADINTEN = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4); // Enable interrupts for channels 0, 1, 2 and 4
 	NVIC_EnableIRQ(ADC_IRQn);
-	LPC_ADC->ADCR |= (1 << 16);
+	LPC_ADC->ADCR |= (1 << 16); // Start burst conversion
 }
 
 void configDAC() {
@@ -155,9 +142,9 @@ void configDAC() {
 	LPC_PINCON->PINSEL1 |= (2 << 20); // Set P0.26 as AOUT
 	LPC_PINCON->PINMODE1 |= (3 << 20); // Set P0.26 with PULL_DOWN
 
-	LPC_SC->PCONP |= (1 << 15);
-	LPC_DAC->DACCTRL = 0x00;
-	LPC_DAC->DACCNTVAL = 0;
+	LPC_SC->PCONP |= (1 << 15); // Power up DAC
+	LPC_DAC->DACCTRL = 0x00; // Disable DMA and bias
+	LPC_DAC->DACCNTVAL = 0; // No timeout
 
 	LPC_DAC->DACR = (0 << 6); // Set the P0.26 DAC output in LOW
 }
@@ -204,33 +191,33 @@ void configGPDMA() { }
 
 void configGPIO() {
 	LPC_PINCON->PINSEL4 &= ~(3 << 0); // Set P2.0 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 0); // Set P2.0 neither PULL-UP nor PULL-DOWN
-	LPC_PINCON->PINMODE4 |= (2 << 0);
+	LPC_PINCON->PINMODE4 &= ~(1 << 0); 
+	LPC_PINCON->PINMODE4 |= (2 << 0); // Set P2.0 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 0); // Set P2.0 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 2); // Set P2.1 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 2); // Set P2.1 neither PULL-UP nor PULL-DOWN
-	LPC_PINCON->PINMODE4 |= (2 << 2);
+	LPC_PINCON->PINMODE4 &= ~(1 << 2);
+	LPC_PINCON->PINMODE4 |= (2 << 2); // Set P2.1 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 1); // Set P2.1 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 4); // Set P2.2 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 4); // Set P2.2 neither PULL-UP nor PULL-DOWN
-	LPC_PINCON->PINMODE4 |= (2 << 4);
+	LPC_PINCON->PINMODE4 &= ~(1 << 4);
+	LPC_PINCON->PINMODE4 |= (2 << 4); // Set P2.2 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 2); // Set P2.2 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 6); // Set P2.3 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 6); // Set P2.3 neither PULL-UP nor PULL-DOWN
-	LPC_PINCON->PINMODE4 |= (2 << 6);
+	LPC_PINCON->PINMODE4 &= ~(1 << 6);
+	LPC_PINCON->PINMODE4 |= (2 << 6); // Set P2.3 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 3); // Set P2.3 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 8); // Set P2.4 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 8); // Set P2.4 neither PULL-UP nor PULL-DOWN
-	LPC_PINCON->PINMODE4 |= (2 << 8);
+	LPC_PINCON->PINMODE4 &= ~(1 << 8);
+	LPC_PINCON->PINMODE4 |= (2 << 8); // Set P2.4 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 4); // Set P2.4 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 10); // Set P2.5 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 10); // Set P2.5 neither PULL-UP nor PULL-DOWN
-	LPC_PINCON->PINMODE4 |= (2 << 10);
+	LPC_PINCON->PINMODE4 &= ~(1 << 10);
+	LPC_PINCON->PINMODE4 |= (2 << 10); // Set P2.5 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 5); // Set P2.5 as OUTPUT
 
 	LPC_GPIO2->FIOCLR |= (1 << 0); // Set P0.0 in LOW
@@ -273,7 +260,7 @@ void DMA_IRQHandler() { }
 
 void EINT0_IRQHandler() {
 	if (debounceCounter_0 == 0) {
-		debounceCounter_0 = DEBOUNCE_DELAY_CYCLES; // Set the debounce counter
+		debounceCounter_0 = DEBOUNCE_DELAY_CYCLES; // Load the debounce counter
 		motorEnable_0 =! motorEnable_0;
 	}
 	LPC_SC->EXTINT = (1 << 0); // Clear the interruption flag
@@ -281,7 +268,7 @@ void EINT0_IRQHandler() {
 
 void EINT1_IRQHandler() {
 	if (debounceCounter_1 == 0) {
-		debounceCounter_1 = DEBOUNCE_DELAY_CYCLES; // Set the debounce counter
+		debounceCounter_1 = DEBOUNCE_DELAY_CYCLES; // Load the debounce counter
 		motorEnable_1 =! motorEnable_1;
 	}
 	LPC_SC->EXTINT = (1 << 1); // Clear the interruption flag
@@ -289,7 +276,7 @@ void EINT1_IRQHandler() {
 
 void EINT2_IRQHandler() {
 	if (debounceCounter_2 == 0) {
-		debounceCounter_2 = DEBOUNCE_DELAY_CYCLES; // Set the debounce counter
+		debounceCounter_2 = DEBOUNCE_DELAY_CYCLES; // Load the debounce counter
 
 		// NOT USED
 
@@ -299,7 +286,7 @@ void EINT2_IRQHandler() {
 
 void EINT3_IRQHandler() {
 	if (debounceCounter_3 == 0) {
-		debounceCounter_3 = DEBOUNCE_DELAY_CYCLES; // Set the debounce counter
+		debounceCounter_3 = DEBOUNCE_DELAY_CYCLES; // Load the debounce counter
 
 		// NOT USED
 
@@ -413,4 +400,3 @@ void updateMotor1() {
     	LPC_GPIO2->FIOCLR |= (1 << 5);
     }
 }
-
