@@ -162,7 +162,7 @@ void configEINT() {
 	NVIC_EnableIRQ(EINT0_IRQn);
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 22); // Clear P2.11 function bits
-	LPC_PINCON->PINSEL4 |=  (1 << 22); // Set P2.11 as EINT1
+	LPC_PINCON->PINSEL4 |= (1 << 22); // Set P2.11 as EINT1
 	LPC_PINCON->PINMODE4 &= ~(3 << 22); // Set P2.11 with PULL-UP
 	LPC_GPIO2->FIODIR &= ~(1 << 11); // Set P2.11 as INPUT
 	LPC_SC->EXTINT |= (1 << 1); // Set EINT1 as external interrupt
@@ -171,7 +171,7 @@ void configEINT() {
 	NVIC_EnableIRQ(EINT1_IRQn);
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 24); // Clear P2.12 function bits
-	LPC_PINCON->PINSEL4 |=  (1 << 24); // Set P2.12 as EINT2
+	LPC_PINCON->PINSEL4 |= (1 << 24); // Set P2.12 as EINT2
 	LPC_PINCON->PINMODE4 &= ~(3 << 24); // Set P2.12 with PULL-UP
 	LPC_GPIO2->FIODIR &= ~(1 << 12); // Set P2.12 as INPUT
 	LPC_SC->EXTINT |= (1 << 2); // Set EINT2 as external interrupt
@@ -180,7 +180,7 @@ void configEINT() {
 	NVIC_EnableIRQ(EINT2_IRQn);
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 26); // Clear P2.13 function bits
-	LPC_PINCON->PINSEL4 |=  (1 << 26); // Set P2.13 as EINT3
+	LPC_PINCON->PINSEL4 |= (1 << 26); // Set P2.13 as EINT3
 	LPC_PINCON->PINMODE4 &= ~(3 << 26); // Set P2.13 with PULL-UP
 	LPC_GPIO2->FIODIR &= ~(1 << 13); // Set P2.13 as INPUT
 	LPC_SC->EXTINT |= (1 << 3); // Set EINT3 as external interrupt
