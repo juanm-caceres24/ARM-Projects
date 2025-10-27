@@ -29,6 +29,7 @@
 #define TIMER_TIME_IN_US 100 // 0.1[ms]
 #define DEBOUNCE_DELAY_CYCLES 2000 // 200[ms]
 #define PWM_CYCLES 100 // Number of cycles (of TIME_IN_US) to consider a PWM cycle (100 * 0.1[ms] = 10[ms])
+#define DAC_CYCLES 1000 // Number of cycles (of TIME_IN_US) to consider a DAC update cycle (1000 * 0.1[ms] = 100[ms])
 
 // General constants
 #define MAX_THROTTLE 64 // Maximum throttle level
@@ -52,20 +53,24 @@ int static ldrValue_2;
 int static ldrValue_3;
 
 // General variables
-uint32_t static debounceCounter_0 = 0;
-uint32_t static debounceCounter_1 = 0;
-uint32_t static debounceCounter_2 = 0;
-uint32_t static debounceCounter_3 = 0;
+int static debounceCounter_0 = 0;
+int static debounceCounter_1 = 0;
+int static debounceCounter_2 = 0;
+int static debounceCounter_3 = 0;
 
-uint32_t static motorEnable_0 = 0; // Enable state of Motor 0 (0 = off, 1 = on)
-uint32_t static motorDirection_0 = 0; // Direction of Motor 0
+int static dacUpdateCounter = 0; // Counter to indicate when to update DAC output
+int static dacValue = 0; // Value to output via DAC
+int static errorSelection = 0; // Variable to select which error to output via DAC
+
+int static motorEnable_0 = 0; // Enable state of Motor 0 (0 = off, 1 = on)
+int static motorDirection_0 = 0; // Direction of Motor 0
 int static motorThrottle_0 = 0; // Throttle level of Motor 0
-uint32_t static pwmCounter_0 = 0; // Counter for PWM cycles of Motor 0
+int static pwmCounter_0 = 0; // Counter for PWM cycles of Motor 0
 
-uint32_t static motorEnable_1 = 0; // Enable state of Motor 1 (0 = off, 1 = on)
-uint32_t static motorDirection_1 = 0; // Direction of Motor 1
+int static motorEnable_1 = 0; // Enable state of Motor 1 (0 = off, 1 = on)
+int static motorDirection_1 = 0; // Direction of Motor 1
 int static motorThrottle_1 = 0; // Throttle level of Motor 1
-uint32_t static pwmCounter_1 = 0; // Counter for PWM cycles of Motor 1
+int static pwmCounter_1 = 0; // Counter for PWM cycles of Motor 1
 
 double static setpoint_0 = 0; // Desired value for Motor 0 control
 double static measuredValue_0 = 0; // Measured value for Motor 0 control
@@ -97,6 +102,7 @@ int calculatePID_0();
 int calculatePID_1();
 void updateMotor0();
 void updateMotor1();
+void updateDAC();
 
 int main() {
 	SystemInit();
@@ -112,6 +118,10 @@ int main() {
 		processThrottleAndDirection();
 		updateMotor0();
 		updateMotor1();
+		if (dacUpdateCounter == 0) {
+			updateDAC();
+			dacUpdateCounter = 1; // Prevent multiple updates within the same cycle
+		}
 	}
 	return 0;
 }
@@ -281,9 +291,7 @@ void EINT1_IRQHandler() {
 void EINT2_IRQHandler() {
 	if (debounceCounter_2 == 0) {
 		debounceCounter_2 = DEBOUNCE_DELAY_CYCLES; // Load the debounce counter
-
-		// NOT USED
-
+		errorSelection =! errorSelection; // Toggle error selection for DAC output
 	}
 	LPC_SC->EXTINT = (1 << 2); // Clear the interruption flag
 }
@@ -318,6 +326,10 @@ void SysTick_Handler() {
 	pwmCounter_1++;
 	if (pwmCounter_1 >= PWM_CYCLES) {
 		pwmCounter_1 = 0; // Reset the PWM counter after a full cycle
+	}
+	dacUpdateCounter++;
+	if (dacUpdateCounter >= DAC_CYCLES) {
+		dacUpdateCounter = 0; // Reset the DAC update counter after a full cycle
 	}
 }
 
@@ -403,4 +415,13 @@ void updateMotor1() {
     } else {
     	LPC_GPIO2->FIOCLR |= (1 << 5);
     }
+}
+
+void updateDAC() {
+	if (errorSelection == 0) {
+		dacValue = constrain((int)(error_0 + 512), 0, 1024); // Output error_0 centered at 512
+	} else {
+		dacValue = constrain((int)(error_1 + 512), 0, 1024); // Output error_1 centered at 512
+	}
+	LPC_DAC->DACR = (dacValue << 6); // Update DAC output
 }
