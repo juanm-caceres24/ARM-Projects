@@ -44,6 +44,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CMSISv2p00_LPC17xx/Drivers/inc}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CMSISv2p00_LPC17xx/inc}&quot;"/>
 								</option>
+								<option id="com.crt.advproject.gcc.exe.debug.option.optimization.level.898451594" superClass="com.crt.advproject.gcc.exe.debug.option.optimization.level" useByScannerDiscovery="true"/>
 								<inputType id="com.crt.advproject.compiler.input.792258140" superClass="com.crt.advproject.compiler.input"/>
 							</tool>
 							<tool id="com.crt.advproject.gas.exe.debug.1127377932" name="MCU Assembler" superClass="com.crt.advproject.gas.exe.debug">
@@ -245,4 +246,5 @@
 	<storageModule moduleId="com.crt.advproject">
 		<boardId>LPCXpresso1769-CD</boardId>
 	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
 </cproject>

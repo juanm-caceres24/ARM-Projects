@@ -14,52 +14,87 @@
 #include "LPC17xx.h"
 #endif
 
-#include "lpc17xx_adc.h"
-#include "lpc17xx_dac.h"
-#include "lpc17xx_exti.h"
-#include "lpc17xx_gpdma.h"
-#include "lpc17xx_gpio.h"
-#include "lpc17xx_nvic.h"
-#include "lpc17xx_pinsel.h"
-#include "lpc17xx_systick.h"
-#include "lpc17xx_timer.h"
+#include<stdlib.h>
+#include<math.h>
+
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define constrain(x, low, high) (((x) < (low)) ? (low) : (((x) > (high)) ? (high) : (x)))
+
+
+//#include "lpc17xx_adc.h"
+//#include "lpc17xx_dac.h"
+//#include "lpc17xx_exti.h"
+//#include "lpc17xx_gpdma.h"
+//#include "lpc17xx_gpio.h"
+//#include "lpc17xx_nvic.h"
+//#include "lpc17xx_pinsel.h"
+//#include "lpc17xx_systick.h"
+//#include "lpc17xx_timer.h"
 
 #include <cr_section_macros.h>
-
-// ADC
-#define ADC_CONVERSION_RATE 100000
-
-// GPDMA
-#define GPDMA_CHANNEL_0 0
-#define GPDMA_CHANNEL_1 1
-#define GPDMA_BUFFER_SIZE 16
 
 // SYSTICK & TIMER
 #define SYSTICK_TIME_IN_US 100 // 0.1[ms]
 #define TIMER_TIME_IN_US 100 // 0.1[ms]
 #define DEBOUNCE_DELAY_CYCLES 2000 // 200[ms]
+#define PWM_CYCLES 100 // Number of cycles (of TIME_IN_US) to consider a PWM cycle (100 * 0.1ms = 10ms)
+
+#define MAX_THROTTLE 64 // Maximum throttle level
+
+#define KP_0 0.03 // Proportional gain for the control algorithm
+#define KI_0 0.00035 // Integral gain for the control algorithm
+#define KD_0 0.000015 // Derivative gain for the control algorithm
+#define WINDUP_LIMIT_0 1000 // Integral windup limit for Motor 0
+
+#define KP_1 0.03 // Proportional gain for the control algorithm
+#define KI_1 0.00035 // Integral gain for the control algorithm
+#define KD_1 0.000015 // Derivative gain for the control algorithm
+#define WINDUP_LIMIT_1 1000 // Integral windup limit for Motor 1
 
 // ADC variables
-uint32_t static adcValue_0;
-uint32_t static adcValue_1;
-uint32_t static adcValue_2;
-uint32_t static adcValue_4;
+int static ldrValue_0;
+int static ldrValue_1;
+int static ldrValue_2;
+int static ldrValue_3;
 
 // GPDMA variables
-GPDMA_LLI_Type static adcLLI_0;
-GPDMA_LLI_Type static adcLLI_1;
-uint32_t static adcBuffer_0[GPDMA_BUFFER_SIZE];
-uint32_t static adcBuffer_1[GPDMA_BUFFER_SIZE];
+//GPDMA_LLI_Type static adcLLI_0;
+//GPDMA_LLI_Type static adcLLI_1;
+//uint32_t static adcBuffer_0[GPDMA_BUFFER_SIZE];
+//uint32_t static adcBuffer_1[GPDMA_BUFFER_SIZE];
 
 // General variables
 uint32_t static debounceCounter_0 = 0;
 uint32_t static debounceCounter_1 = 0;
 uint32_t static debounceCounter_2 = 0;
 uint32_t static debounceCounter_3 = 0;
-uint32_t static buttonState_0 = 0;
-uint32_t static buttonState_1 = 0;
-uint32_t static buttonState_2 = 0;
-uint32_t static buttonState_3 = 0;
+
+uint32_t static motorEnable_0 = 0; // Enable state of Motor 0 (0 = off, 1 = on)
+uint32_t static motorDirection_0 = 0; // Direction of Motor 0
+int static motorThrottle_0 = 0; // Throttle level of Motor 0
+uint32_t static pwmCounter_0 = 0; // Counter for PWM cycles of Motor 0
+
+uint32_t static motorEnable_1 = 0; // Enable state of Motor 1 (0 = off, 1 = on)
+uint32_t static motorDirection_1 = 0; // Direction of Motor 1
+int static motorThrottle_1 = 0; // Throttle level of Motor 1
+uint32_t static pwmCounter_1 = 0; // Counter for PWM cycles of Motor 1
+
+double static setpoint_0 = 0; // Desired value for Motor 0 control
+double static measuredValue_0 = 0; // Measured value for Motor 0 control
+double static error_0 = 0; // Current error for Motor 0 control
+double static previousError_0 = 0; // Previous error for Motor 0 control
+double static integral_0 = 0; // Integral term for Motor 0 control
+double static derivative_0 = 0; // Derivative term for Motor 0 control
+double static output_0 = 0; // PID output for Motor 0 control
+
+double static setpoint_1 = 0; // Desired value for Motor 1 control
+double static measuredValue_1 = 0; // Measured value for Motor 1 control
+double static error_1 = 0; // Current error for Motor 1 control
+double static previousError_1 = 0; // Previous error for Motor 1 control
+double static integral_1 = 0; // Integral term for Motor 1 control
+double static derivative_1 = 0; // Derivative term for Motor 1 control
+double static output_1 = 0; // PID output for Motor 1 control
 
 void configADC();
 void configDAC();
@@ -69,8 +104,11 @@ void configGPIO();
 void configSysTick();
 void configTimer();
 
-void readADC();
-void writeDAC();
+void processThrottleAndDirection();
+int calculatePID_0();
+int calculatePID_1();
+void updateMotor0();
+void updateMotor1();
 
 int main() {
 	SystemInit();
@@ -78,11 +116,13 @@ int main() {
 	configDAC();
 	configEINT();
 	//configGPDMA();
-	//configGPIO();
-	//configSysTick();
-	configTimer();
+	configGPIO();
+	configSysTick();
+	//configTimer();
 	while (1) {
-		writeDAC();
+		processThrottleAndDirection();
+		updateMotor0();
+		updateMotor1();
 	}
 	return 0;
 }
@@ -92,103 +132,119 @@ int main() {
  */
 
 void configADC() {
-	LPC_PINCON->PINSEL1 &= ~(3 << 14);	// Clear P0.23
-	LPC_PINCON->PINSEL1 |=  (1 << 14);	// Set P0.23 as AD0.0
-	LPC_PINCON->PINSEL1 &= ~(3 << 16);	// Clear P0.24
-	LPC_PINCON->PINSEL1 |=  (1 << 16);	// Set P0.24 as AD0.1
-	LPC_PINCON->PINSEL1 &= ~(3 << 18);	// Clear P0.25
-	LPC_PINCON->PINSEL1 |=  (1 << 18);	// Set P0.25 as AD0.2
-	LPC_PINCON->PINSEL3 |=  (3 << 28);	// Set P1.30 as AD0.4
+	LPC_PINCON->PINSEL1 &= ~(3 << 14); // Clear P0.23
+	LPC_PINCON->PINSEL1 |= (1 << 14); // Set P0.23 as AD0.0
+	LPC_PINCON->PINSEL1 &= ~(3 << 16); // Clear P0.24
+	LPC_PINCON->PINSEL1 |= (1 << 16); // Set P0.24 as AD0.1
+	LPC_PINCON->PINSEL1 &= ~(3 << 18); // Clear P0.25
+	LPC_PINCON->PINSEL1 |= (1 << 18); // Set P0.25 as AD0.2
+	LPC_PINCON->PINSEL3 &= ~(3 << 28); // Clear P1.30
+	LPC_PINCON->PINSEL3 |= (3 << 28); // Set P1.30 as AD0.4
 
 	LPC_SC->PCONP |= (1 << 12);
 	LPC_SC->PCLKSEL0 &= ~(3 << 24);
-	LPC_SC->PCLKSEL0 |=  (3 << 24);
+	LPC_SC->PCLKSEL0 |= (3 << 24);
 	LPC_ADC->ADCR = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4) | (124 << 8) | (0 << 16) | (1 << 21);
 	LPC_ADC->ADINTEN = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4);
 	NVIC_EnableIRQ(ADC_IRQn);
 	LPC_ADC->ADCR |= (1 << 16);
 }
 
-void configDAC() { }
+void configDAC() {
+	LPC_PINCON->PINSEL1 &= ~(3 << 20); // Clear P0.26
+	LPC_PINCON->PINSEL1 |= (2 << 20); // Set P0.26 as AOUT
+	LPC_PINCON->PINMODE1 |= (3 << 20); // Set P0.26 with PULL_DOWN
+
+	LPC_SC->PCONP |= (1 << 15);
+	LPC_DAC->DACCTRL = 0x00;
+	LPC_DAC->DACCNTVAL = 0;
+
+	LPC_DAC->DACR = (0 << 6); // Set the P0.26 DAC output in LOW
+}
 
 void configEINT() {
-	LPC_PINCON->PINSEL4 &= ~(3 << 20);	// Clear P2.10
-	LPC_PINCON->PINSEL4 |=  (1 << 20);	// Set P2.10 as EINT0
-	LPC_PINCON->PINMODE4 &= ~(3 << 20);	// Set P2.10 with PULL-UP
-	LPC_GPIO2->FIODIR &= ~(1 << 10);	// Set P2.10 as INPUT
-	LPC_SC->EXTINT |= (1 << 0);			// Set EINT0 as external interrupt
-	LPC_SC->EXTMODE |= (1 << 0);		// Set EINT0 as edge sensitive
-	LPC_SC->EXTPOLAR &= ~(1 << 0);		// Set EINT0 interruption in falling edge
+	LPC_PINCON->PINSEL4 &= ~(3 << 20); // Clear P2.10
+	LPC_PINCON->PINSEL4 |= (1 << 20); // Set P2.10 as EINT0
+	LPC_PINCON->PINMODE4 &= ~(3 << 20); // Set P2.10 with PULL-UP
+	LPC_GPIO2->FIODIR &= ~(1 << 10); // Set P2.10 as INPUT
+	LPC_SC->EXTINT |= (1 << 0); // Set EINT0 as external interrupt
+	LPC_SC->EXTMODE |= (1 << 0); // Set EINT0 as edge sensitive
+	LPC_SC->EXTPOLAR &= ~(1 << 0); // Set EINT0 interruption in falling edge
 	NVIC_EnableIRQ(EINT0_IRQn);
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 22);	// Clear P2.11
-	LPC_PINCON->PINSEL4 |=  (1 << 22);	// Set P2.11 as EINT1
-	LPC_PINCON->PINMODE4 &= ~(3 << 22);	// Set P2.11 with PULL-UP
-	LPC_GPIO2->FIODIR &= ~(1 << 11);	// Set P2.11 as INPUT
-	LPC_SC->EXTINT |= (1 << 1);			// Set EINT1 as external interrupt
-	LPC_SC->EXTMODE |= (1 << 1);		// Set EINT1 as edge sensitive
-	LPC_SC->EXTPOLAR &= ~(1 << 1);		// Set EINT1 interruption in falling edge
+	LPC_PINCON->PINSEL4 &= ~(3 << 22); // Clear P2.11
+	LPC_PINCON->PINSEL4 |=  (1 << 22); // Set P2.11 as EINT1
+	LPC_PINCON->PINMODE4 &= ~(3 << 22); // Set P2.11 with PULL-UP
+	LPC_GPIO2->FIODIR &= ~(1 << 11); // Set P2.11 as INPUT
+	LPC_SC->EXTINT |= (1 << 1); // Set EINT1 as external interrupt
+	LPC_SC->EXTMODE |= (1 << 1); // Set EINT1 as edge sensitive
+	LPC_SC->EXTPOLAR &= ~(1 << 1); // Set EINT1 interruption in falling edge
 	NVIC_EnableIRQ(EINT1_IRQn);
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 24);	// Clear P2.12
-	LPC_PINCON->PINSEL4 |=  (1 << 24);	// Set P2.12 as EINT2
-	LPC_PINCON->PINMODE4 &= ~(3 << 24);	// Set P2.12 with PULL-UP
-	LPC_GPIO2->FIODIR &= ~(1 << 12);	// Set P2.12 as INPUT
-	LPC_SC->EXTINT |= (1 << 2);			// Set EINT2 as external interrupt
-	LPC_SC->EXTMODE |= (1 << 2);		// Set EINT2 as edge sensitive
-	LPC_SC->EXTPOLAR &= ~(1 << 2);		// Set EINT2 interruption in falling edge
+	LPC_PINCON->PINSEL4 &= ~(3 << 24); // Clear P2.12
+	LPC_PINCON->PINSEL4 |=  (1 << 24); // Set P2.12 as EINT2
+	LPC_PINCON->PINMODE4 &= ~(3 << 24); // Set P2.12 with PULL-UP
+	LPC_GPIO2->FIODIR &= ~(1 << 12); // Set P2.12 as INPUT
+	LPC_SC->EXTINT |= (1 << 2); // Set EINT2 as external interrupt
+	LPC_SC->EXTMODE |= (1 << 2); // Set EINT2 as edge sensitive
+	LPC_SC->EXTPOLAR &= ~(1 << 2); // Set EINT2 interruption in falling edge
 	NVIC_EnableIRQ(EINT2_IRQn);
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 26);	// Clear P2.12
-	LPC_PINCON->PINSEL4 |=  (1 << 26);	// Set P2.12 as EINT2
-	LPC_PINCON->PINMODE4 &= ~(3 << 26);	// Set P2.12 with PULL-UP
-	LPC_GPIO2->FIODIR &= ~(1 << 13);	// Set P2.12 as INPUT
-	LPC_SC->EXTINT |= (1 << 3);			// Set EINT2 as external interrupt
-	LPC_SC->EXTMODE |= (1 << 3);		// Set EINT2 as edge sensitive
-	LPC_SC->EXTPOLAR &= ~(1 << 3);		// Set EINT2 interruption in falling edge
+	LPC_PINCON->PINSEL4 &= ~(3 << 26); // Clear P2.12
+	LPC_PINCON->PINSEL4 |=  (1 << 26); // Set P2.12 as EINT2
+	LPC_PINCON->PINMODE4 &= ~(3 << 26); // Set P2.12 with PULL-UP
+	LPC_GPIO2->FIODIR &= ~(1 << 13); // Set P2.12 as INPUT
+	LPC_SC->EXTINT |= (1 << 3); // Set EINT3 as external interrupt
+	LPC_SC->EXTMODE |= (1 << 3); // Set EINT3 as edge sensitive
+	LPC_SC->EXTPOLAR &= ~(1 << 3); // Set EINT3 interruption in falling edge
 	NVIC_EnableIRQ(EINT3_IRQn);
 }
 
 void configGPDMA() { }
 
 void configGPIO() {
-	LPC_PINCON->PINSEL4 &= ~(3 << 0);	// Set P2.0 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(2 << 0);	// Set P2.0 neither PULL-UP nor PULL-DOWN
-	LPC_GPIO2->FIODIR &= ~(1 << 0);		// Set P2.0 as OUTPUT
+	LPC_PINCON->PINSEL4 &= ~(3 << 0); // Set P2.0 as GPIO
+	LPC_PINCON->PINMODE4 &= ~(1 << 0); // Set P2.0 neither PULL-UP nor PULL-DOWN
+	LPC_PINCON->PINMODE4 |= (2 << 0);
+	LPC_GPIO2->FIODIR |= (1 << 0); // Set P2.0 as OUTPUT
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 2);	// Set P2.1 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(2 << 2);	// Set P2.1 neither PULL-UP nor PULL-DOWN
-	LPC_GPIO2->FIODIR &= ~(1 << 1);		// Set P2.1 as OUTPUT
+	LPC_PINCON->PINSEL4 &= ~(3 << 2); // Set P2.1 as GPIO
+	LPC_PINCON->PINMODE4 &= ~(1 << 2); // Set P2.1 neither PULL-UP nor PULL-DOWN
+	LPC_PINCON->PINMODE4 |= (2 << 2);
+	LPC_GPIO2->FIODIR |= (1 << 1); // Set P2.1 as OUTPUT
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 4);	// Set P2.2 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(2 << 4);	// Set P2.2 neither PULL-UP nor PULL-DOWN
-	LPC_GPIO2->FIODIR &= ~(1 << 2);		// Set P2.2 as OUTPUT
+	LPC_PINCON->PINSEL4 &= ~(3 << 4); // Set P2.2 as GPIO
+	LPC_PINCON->PINMODE4 &= ~(1 << 4); // Set P2.2 neither PULL-UP nor PULL-DOWN
+	LPC_PINCON->PINMODE4 |= (2 << 4);
+	LPC_GPIO2->FIODIR |= (1 << 2); // Set P2.2 as OUTPUT
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 6);	// Set P2.3 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(2 << 6);	// Set P2.3 neither PULL-UP nor PULL-DOWN
-	LPC_GPIO2->FIODIR &= ~(1 << 3);		// Set P2.3 as OUTPUT
+	LPC_PINCON->PINSEL4 &= ~(3 << 6); // Set P2.3 as GPIO
+	LPC_PINCON->PINMODE4 &= ~(1 << 6); // Set P2.3 neither PULL-UP nor PULL-DOWN
+	LPC_PINCON->PINMODE4 |= (2 << 6);
+	LPC_GPIO2->FIODIR |= (1 << 3); // Set P2.3 as OUTPUT
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 8);	// Set P2.4 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(2 << 8);	// Set P2.4 neither PULL-UP nor PULL-DOWN
-	LPC_GPIO2->FIODIR &= ~(1 << 4);		// Set P2.4 as OUTPUT
+	LPC_PINCON->PINSEL4 &= ~(3 << 8); // Set P2.4 as GPIO
+	LPC_PINCON->PINMODE4 &= ~(1 << 8); // Set P2.4 neither PULL-UP nor PULL-DOWN
+	LPC_PINCON->PINMODE4 |= (2 << 8);
+	LPC_GPIO2->FIODIR |= (1 << 4); // Set P2.4 as OUTPUT
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 10);	// Set P2.5 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(2 << 10);	// Set P2.5 neither PULL-UP nor PULL-DOWN
-	LPC_GPIO2->FIODIR &= ~(1 << 5);		// Set P2.5 as OUTPUT
+	LPC_PINCON->PINSEL4 &= ~(3 << 10); // Set P2.5 as GPIO
+	LPC_PINCON->PINMODE4 &= ~(1 << 10); // Set P2.5 neither PULL-UP nor PULL-DOWN
+	LPC_PINCON->PINMODE4 |= (2 << 10);
+	LPC_GPIO2->FIODIR |= (1 << 5); // Set P2.5 as OUTPUT
 
-	LPC_GPIO2->FIOCLR |= (1 << 0);		// Set P0.0 in LOW
-	LPC_GPIO2->FIOCLR |= (1 << 1);		// Set P0.1 in LOW
-	LPC_GPIO2->FIOCLR |= (1 << 2);		// Set P0.2 in LOW
-	LPC_GPIO2->FIOCLR |= (1 << 3);		// Set P0.3 in LOW
-	LPC_GPIO2->FIOCLR |= (1 << 4);		// Set P0.4 in LOW
-	LPC_GPIO2->FIOCLR |= (1 << 5);		// Set P0.5 in LOW
+	LPC_GPIO2->FIOCLR |= (1 << 0); // Set P0.0 in LOW
+	LPC_GPIO2->FIOCLR |= (1 << 1); // Set P0.1 in LOW
+	LPC_GPIO2->FIOCLR |= (1 << 2); // Set P0.2 in LOW
+	LPC_GPIO2->FIOCLR |= (1 << 3); // Set P0.3 in LOW
+	LPC_GPIO2->FIOCLR |= (1 << 4); // Set P0.4 in LOW
+	LPC_GPIO2->FIOCLR |= (1 << 5); // Set P0.5 in LOW
 }
 
 void configSysTick() {
 	SysTick->LOAD = (SystemCoreClock / 1000000) * SYSTICK_TIME_IN_US - 1;
 	SysTick->VAL = 0;
 	SysTick->CTRL = (1 << 0) | (1 << 1) | (1 << 2); // Enable SysTick counter, enable SysTick interruptions and select internal clock
-	NVIC_EnableIRQ(SysTick_IRQn);
 }
 
 void configTimer() { }
@@ -200,20 +256,17 @@ void configTimer() { }
 void ADC_IRQHandler() {
 	// Check which channel triggered the interruption and store its value
 	if (LPC_ADC->ADSTAT & (1 << 0)) {
-		adcValue_0 = (LPC_ADC->ADDR0 >> 4) & 0xFFF;
+		ldrValue_0 = (LPC_ADC->ADDR0 >> 4) & 0xFFF;
 	}
 	if (LPC_ADC->ADSTAT & (1 << 1)) {
-		adcValue_1 = (LPC_ADC->ADDR1 >> 4) & 0xFFF;
+		ldrValue_1 = (LPC_ADC->ADDR1 >> 4) & 0xFFF;
 	}
 	if (LPC_ADC->ADSTAT & (1 << 2)) {
-		adcValue_2 = (LPC_ADC->ADDR2 >> 4) & 0xFFF;
+		ldrValue_2 = (LPC_ADC->ADDR2 >> 4) & 0xFFF;
 	}
 	if (LPC_ADC->ADSTAT & (1 << 4)) {
-		adcValue_3 = (LPC_ADC->ADDR3 >> 4) & 0xFFF;
+		ldrValue_3 = (LPC_ADC->ADDR4 >> 4) & 0xFFF;
 	}
-	// Clean the global interruption by reading the global data register
-	volatile uint32_t dummy = LPC_ADC->ADGDR;
-	(void)dummy;
 }
 
 void DMA_IRQHandler() { }
@@ -221,7 +274,7 @@ void DMA_IRQHandler() { }
 void EINT0_IRQHandler() {
 	if (debounceCounter_0 == 0) {
 		debounceCounter_0 = DEBOUNCE_DELAY_CYCLES; // Set the debounce counter
-		buttonState_0 =! buttonState_0;
+		motorEnable_0 =! motorEnable_0;
 	}
 	LPC_SC->EXTINT = (1 << 0); // Clear the interruption flag
 }
@@ -229,7 +282,7 @@ void EINT0_IRQHandler() {
 void EINT1_IRQHandler() {
 	if (debounceCounter_1 == 0) {
 		debounceCounter_1 = DEBOUNCE_DELAY_CYCLES; // Set the debounce counter
-		buttonState_1 =! buttonState_1;
+		motorEnable_1 =! motorEnable_1;
 	}
 	LPC_SC->EXTINT = (1 << 1); // Clear the interruption flag
 }
@@ -237,7 +290,9 @@ void EINT1_IRQHandler() {
 void EINT2_IRQHandler() {
 	if (debounceCounter_2 == 0) {
 		debounceCounter_2 = DEBOUNCE_DELAY_CYCLES; // Set the debounce counter
-		buttonState_2 =! buttonState_2;
+
+		// NOT USED
+
 	}
 	LPC_SC->EXTINT = (1 << 2); // Clear the interruption flag
 }
@@ -245,7 +300,9 @@ void EINT2_IRQHandler() {
 void EINT3_IRQHandler() {
 	if (debounceCounter_3 == 0) {
 		debounceCounter_3 = DEBOUNCE_DELAY_CYCLES; // Set the debounce counter
-		buttonState_3 =! buttonState_3;
+
+		// NOT USED
+
 	}
 	LPC_SC->EXTINT = (1 << 3); // Clear the interruption flag
 }
@@ -263,6 +320,14 @@ void SysTick_Handler() {
 	if (debounceCounter_3 > 0) {
 		debounceCounter_3--; // Decrement the debounce counter
 	}
+	pwmCounter_0++;
+	if (pwmCounter_0 >= PWM_CYCLES) {
+		pwmCounter_0 = 0; // Reset the PWM counter after a full cycle
+	}
+	pwmCounter_1++;
+	if (pwmCounter_1 >= PWM_CYCLES) {
+		pwmCounter_1 = 0; // Reset the PWM counter after a full cycle
+	}
 }
 
 void TIMER0_IRQHandler() { }
@@ -271,12 +336,81 @@ void TIMER0_IRQHandler() { }
  * GENERAL METHODS
  */
 
-void readADC() { }
+void processThrottleAndDirection() {
+    int diffRightLeft = ldrValue_0 - ldrValue_1;
+    if (diffRightLeft > 0) {
+        motorDirection_0 = 0; // Right
+    } else {
+        motorDirection_0 = 1; // Left
+    }
+    motorThrottle_0 = calculatePID_0(); // Use PID to determine throttle
 
-void writeDAC() {
-	if (buttonState_0) {
-		LPC_DAC->DACR = (adcValue_0 >> 2);
-	} else {
-		LPC_DAC->DACR = (adcValue_1 >> 2);
-	}
+    int diffUpDown = ldrValue_2 - ldrValue_3;
+    if (diffUpDown > 0) {
+        motorDirection_1 = 0; // Up
+    } else {
+        motorDirection_1 = 1; // Down
+    }
+    motorThrottle_1 = calculatePID_1(); // Use PID to determine throttle
 }
+
+int calculatePID_0() {
+    measuredValue_0 = ldrValue_0 - ldrValue_1; // Difference between LDRs
+    error_0 = setpoint_0 - measuredValue_0;
+    integral_0 += error_0 * (SYSTICK_TIME_IN_US / 1000000.0); // Integrate the error over time
+    integral_0 = constrain(integral_0, -WINDUP_LIMIT_0, WINDUP_LIMIT_0); // Prevent integral windup
+    derivative_0 = (error_0 - previousError_0) / (SYSTICK_TIME_IN_US / 1000000.0); // Derivative of the error
+    output_0 = KP_0 * error_0 + KI_0 * integral_0 + KD_0 * derivative_0;
+    previousError_0 = error_0;
+    return min(MAX_THROTTLE, max(1, abs((int)output_0))); // Scale throttle based on PID output
+}
+
+int calculatePID_1() {
+    measuredValue_1 = ldrValue_2 - ldrValue_3; // Difference between LDRs
+    error_1 = setpoint_1 - measuredValue_1;
+    integral_1 += error_1 * (SYSTICK_TIME_IN_US / 1000000.0); // Integrate the error over time
+    integral_1 = constrain(integral_1, -WINDUP_LIMIT_1, WINDUP_LIMIT_1); // Prevent integral windup
+    derivative_1 = (error_1 - previousError_1) / (SYSTICK_TIME_IN_US / 1000000.0); // Derivative of the error
+    output_1 = KP_1 * error_1 + KI_1 * integral_1 + KD_1 * derivative_1;
+    previousError_1 = error_1;
+    return min(MAX_THROTTLE, max(1, abs((int)output_1))); // Scale throttle based on PID output
+}
+
+void updateMotor0() {
+    if (motorDirection_0) {
+        LPC_GPIO2->FIOCLR |= (1 << 0);
+        LPC_GPIO2->FIOSET |= (1 << 1);
+    } else {
+    	LPC_GPIO2->FIOSET |= (1 << 0);
+    	LPC_GPIO2->FIOCLR |= (1 << 1);
+    }
+    if (motorEnable_0) {
+        if (pwmCounter_0 < (motorThrottle_0 * (PWM_CYCLES / MAX_THROTTLE))) {
+            LPC_GPIO2->FIOSET |= (1 << 4);
+        } else {
+        	LPC_GPIO2->FIOCLR |= (1 << 4);
+        }
+    } else {
+    	LPC_GPIO2->FIOCLR |= (1 << 4);
+    }
+}
+
+void updateMotor1() {
+    if (motorDirection_1) {
+    	LPC_GPIO2->FIOCLR |= (1 << 2);
+    	LPC_GPIO2->FIOSET |= (1 << 3);
+    } else {
+    	LPC_GPIO2->FIOSET |= (1 << 2);
+    	LPC_GPIO2->FIOCLR |= (1 << 3);
+    }
+    if (motorEnable_1) {
+        if (pwmCounter_1 < (motorThrottle_1 * (PWM_CYCLES / MAX_THROTTLE))) {
+        	LPC_GPIO2->FIOSET |= (1 << 5);
+        } else {
+        	LPC_GPIO2->FIOCLR |= (1 << 5);
+        }
+    } else {
+    	LPC_GPIO2->FIOCLR |= (1 << 5);
+    }
+}
+
