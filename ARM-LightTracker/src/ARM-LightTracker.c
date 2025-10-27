@@ -17,7 +17,7 @@
 #include<stdlib.h>
 #include<math.h>
 
-// MACROS
+// Macro functions
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define constrain(x, low, high) (((x) < (low)) ? (low) : (((x) > (high)) ? (high) : (x)))
