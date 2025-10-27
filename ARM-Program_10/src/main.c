@@ -28,7 +28,7 @@
 #define SYSTICK_TIME_IN_US 100 // 0.1[ms]
 #define TIMER_TIME_IN_US 100 // 0.1[ms]
 #define DEBOUNCE_DELAY_CYCLES 2000 // 200[ms]
-#define PWM_CYCLES 100 // Number of cycles (of TIME_IN_US) to consider a PWM cycle (100 * 0.1ms = 10ms)
+#define PWM_CYCLES 100 // Number of cycles (of TIME_IN_US) to consider a PWM cycle (100 * 0.1[ms] = 10[ms])
 
 // General constants
 #define MAX_THROTTLE 64 // Maximum throttle level
@@ -119,13 +119,13 @@ int main() {
  */
 
 void configADC() {
-	LPC_PINCON->PINSEL1 &= ~(3 << 14); // Clear P0.23
+	LPC_PINCON->PINSEL1 &= ~(3 << 14); // Clear P0.23 function bits
 	LPC_PINCON->PINSEL1 |= (1 << 14); // Set P0.23 as AD0.0
-	LPC_PINCON->PINSEL1 &= ~(3 << 16); // Clear P0.24
+	LPC_PINCON->PINSEL1 &= ~(3 << 16); // Clear P0.24 function bits
 	LPC_PINCON->PINSEL1 |= (1 << 16); // Set P0.24 as AD0.1
-	LPC_PINCON->PINSEL1 &= ~(3 << 18); // Clear P0.25
+	LPC_PINCON->PINSEL1 &= ~(3 << 18); // Clear P0.25 function bits
 	LPC_PINCON->PINSEL1 |= (1 << 18); // Set P0.25 as AD0.2
-	LPC_PINCON->PINSEL3 &= ~(3 << 28); // Clear P1.30
+	LPC_PINCON->PINSEL3 &= ~(3 << 28); // Clear P1.30 function bits
 	LPC_PINCON->PINSEL3 |= (3 << 28); // Set P1.30 as AD0.4
 
 	LPC_SC->PCONP |= (1 << 12); // Power up ADC
@@ -138,7 +138,7 @@ void configADC() {
 }
 
 void configDAC() {
-	LPC_PINCON->PINSEL1 &= ~(3 << 20); // Clear P0.26
+	LPC_PINCON->PINSEL1 &= ~(3 << 20); // Clear P0.26 function bits
 	LPC_PINCON->PINSEL1 |= (2 << 20); // Set P0.26 as AOUT
 	LPC_PINCON->PINMODE1 |= (3 << 20); // Set P0.26 with PULL_DOWN
 
@@ -150,7 +150,7 @@ void configDAC() {
 }
 
 void configEINT() {
-	LPC_PINCON->PINSEL4 &= ~(3 << 20); // Clear P2.10
+	LPC_PINCON->PINSEL4 &= ~(3 << 20); // Clear P2.10 function bits
 	LPC_PINCON->PINSEL4 |= (1 << 20); // Set P2.10 as EINT0
 	LPC_PINCON->PINMODE4 &= ~(3 << 20); // Set P2.10 with PULL-UP
 	LPC_GPIO2->FIODIR &= ~(1 << 10); // Set P2.10 as INPUT
@@ -159,7 +159,7 @@ void configEINT() {
 	LPC_SC->EXTPOLAR &= ~(1 << 0); // Set EINT0 interruption in falling edge
 	NVIC_EnableIRQ(EINT0_IRQn);
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 22); // Clear P2.11
+	LPC_PINCON->PINSEL4 &= ~(3 << 22); // Clear P2.11 function bits
 	LPC_PINCON->PINSEL4 |=  (1 << 22); // Set P2.11 as EINT1
 	LPC_PINCON->PINMODE4 &= ~(3 << 22); // Set P2.11 with PULL-UP
 	LPC_GPIO2->FIODIR &= ~(1 << 11); // Set P2.11 as INPUT
@@ -168,7 +168,7 @@ void configEINT() {
 	LPC_SC->EXTPOLAR &= ~(1 << 1); // Set EINT1 interruption in falling edge
 	NVIC_EnableIRQ(EINT1_IRQn);
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 24); // Clear P2.12
+	LPC_PINCON->PINSEL4 &= ~(3 << 24); // Clear P2.12 function bits
 	LPC_PINCON->PINSEL4 |=  (1 << 24); // Set P2.12 as EINT2
 	LPC_PINCON->PINMODE4 &= ~(3 << 24); // Set P2.12 with PULL-UP
 	LPC_GPIO2->FIODIR &= ~(1 << 12); // Set P2.12 as INPUT
@@ -177,10 +177,10 @@ void configEINT() {
 	LPC_SC->EXTPOLAR &= ~(1 << 2); // Set EINT2 interruption in falling edge
 	NVIC_EnableIRQ(EINT2_IRQn);
 
-	LPC_PINCON->PINSEL4 &= ~(3 << 26); // Clear P2.12
-	LPC_PINCON->PINSEL4 |=  (1 << 26); // Set P2.12 as EINT2
-	LPC_PINCON->PINMODE4 &= ~(3 << 26); // Set P2.12 with PULL-UP
-	LPC_GPIO2->FIODIR &= ~(1 << 13); // Set P2.12 as INPUT
+	LPC_PINCON->PINSEL4 &= ~(3 << 26); // Clear P2.13 function bits
+	LPC_PINCON->PINSEL4 |=  (1 << 26); // Set P2.13 as EINT3
+	LPC_PINCON->PINMODE4 &= ~(3 << 26); // Set P2.13 with PULL-UP
+	LPC_GPIO2->FIODIR &= ~(1 << 13); // Set P2.13 as INPUT
 	LPC_SC->EXTINT |= (1 << 3); // Set EINT3 as external interrupt
 	LPC_SC->EXTMODE |= (1 << 3); // Set EINT3 as edge sensitive
 	LPC_SC->EXTPOLAR &= ~(1 << 3); // Set EINT3 interruption in falling edge
@@ -191,32 +191,32 @@ void configGPDMA() { }
 
 void configGPIO() {
 	LPC_PINCON->PINSEL4 &= ~(3 << 0); // Set P2.0 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 0); 
+	LPC_PINCON->PINMODE4 &= ~(1 << 0); // Clear P2.0 mode bits
 	LPC_PINCON->PINMODE4 |= (2 << 0); // Set P2.0 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 0); // Set P2.0 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 2); // Set P2.1 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 2);
+	LPC_PINCON->PINMODE4 &= ~(1 << 2); // Clear P2.1 mode bits
 	LPC_PINCON->PINMODE4 |= (2 << 2); // Set P2.1 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 1); // Set P2.1 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 4); // Set P2.2 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 4);
+	LPC_PINCON->PINMODE4 &= ~(1 << 4); // Clear P2.2 mode bits
 	LPC_PINCON->PINMODE4 |= (2 << 4); // Set P2.2 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 2); // Set P2.2 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 6); // Set P2.3 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 6);
+	LPC_PINCON->PINMODE4 &= ~(1 << 6); // Clear P2.3 mode bits
 	LPC_PINCON->PINMODE4 |= (2 << 6); // Set P2.3 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 3); // Set P2.3 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 8); // Set P2.4 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 8);
+	LPC_PINCON->PINMODE4 &= ~(1 << 8); // Clear P2.4 mode bits
 	LPC_PINCON->PINMODE4 |= (2 << 8); // Set P2.4 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 4); // Set P2.4 as OUTPUT
 
 	LPC_PINCON->PINSEL4 &= ~(3 << 10); // Set P2.5 as GPIO
-	LPC_PINCON->PINMODE4 &= ~(1 << 10);
+	LPC_PINCON->PINMODE4 &= ~(1 << 10); // Clear P2.5 mode bits
 	LPC_PINCON->PINMODE4 |= (2 << 10); // Set P2.5 neither PULL-UP nor PULL-DOWN
 	LPC_GPIO2->FIODIR |= (1 << 5); // Set P2.5 as OUTPUT
 
