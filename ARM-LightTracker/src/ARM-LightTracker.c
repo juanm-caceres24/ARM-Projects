@@ -14,8 +14,8 @@
 #include "LPC17xx.h"
 #endif
 
-#include<stdlib.h>
-#include<math.h>
+#include <stdlib.h>
+#include <math.h>
 
 // Macro functions
 #define max(a, b) ((a) > (b) ? (a) : (b))
