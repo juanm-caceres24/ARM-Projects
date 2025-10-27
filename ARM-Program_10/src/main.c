@@ -86,6 +86,7 @@ double static output_1 = 0; // PID output for Motor 1 control
 void configADC();
 void configDAC();
 void configEINT();
+void configUART();
 void configGPDMA();
 void configGPIO();
 void configSysTick();
@@ -102,6 +103,7 @@ int main() {
 	configADC();
 	configDAC();
 	configEINT();
+	//configUART();
 	//configGPDMA();
 	configGPIO();
 	configSysTick();
@@ -186,6 +188,8 @@ void configEINT() {
 	LPC_SC->EXTPOLAR &= ~(1 << 3); // Set EINT3 interruption in falling edge
 	NVIC_EnableIRQ(EINT3_IRQn);
 }
+
+void configUART() { }
 
 void configGPDMA() { }
 
