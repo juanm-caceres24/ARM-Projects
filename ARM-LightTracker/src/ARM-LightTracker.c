@@ -277,7 +277,7 @@ void EINT0_IRQHandler() {
 		debounceCounter_0 = DEBOUNCE_DELAY_CYCLES; // Load the debounce counter
 		motorEnable_0 =! motorEnable_0;
 	}
-	LPC_SC->EXTINT = (1 << 0); // Clear the interruption flag
+	LPC_SC->EXTINT |= (1 << 0); // Enable the interruption again
 }
 
 void EINT1_IRQHandler() {
@@ -285,7 +285,7 @@ void EINT1_IRQHandler() {
 		debounceCounter_1 = DEBOUNCE_DELAY_CYCLES; // Load the debounce counter
 		motorEnable_1 =! motorEnable_1;
 	}
-	LPC_SC->EXTINT = (1 << 1); // Clear the interruption flag
+	LPC_SC->EXTINT |= (1 << 1); // Enable the interruption again
 }
 
 void EINT2_IRQHandler() {
@@ -293,7 +293,7 @@ void EINT2_IRQHandler() {
 		debounceCounter_2 = DEBOUNCE_DELAY_CYCLES; // Load the debounce counter
 		errorSelection =! errorSelection; // Toggle error selection for DAC output
 	}
-	LPC_SC->EXTINT = (1 << 2); // Clear the interruption flag
+	LPC_SC->EXTINT |= (1 << 2); // Enable the interruption again
 }
 
 void EINT3_IRQHandler() {
@@ -303,7 +303,7 @@ void EINT3_IRQHandler() {
 		// NOT USED
 
 	}
-	LPC_SC->EXTINT = (1 << 3); // Clear the interruption flag
+	LPC_SC->EXTINT |= (1 << 3); // Enable the interruption again
 }
 
 void SysTick_Handler() {
