@@ -116,11 +116,11 @@ double static output_1 = 0; // PID output for Motor 1 control
 void configADC();
 void configDAC();
 void configEINT();
-void configUART();
 void configGPDMA();
 void configGPIO();
 void configSysTick();
 void configTimer();
+void configUART();
 
 void UART_SendString(uint8_t *str);
 void processThrottleAndDirection();
@@ -135,11 +135,11 @@ int main() {
 	configADC();
 	configDAC();
 	configEINT();
-	configUART();
 	configGPDMA();
 	configGPIO();
 	configSysTick();
 	configTimer();
+	configUART();
 	while (1) {
 		switch (modeSelection) {
 			case 0: // LDRs mode
@@ -274,20 +274,6 @@ void configEINT() {
 	NVIC_EnableIRQ(EINT3_IRQn);
 }
 
-void configUART() {
-	LPC_PINCON->PINSEL0 &= ~(3 << 4); // Clear P0.2 function bits
-	LPC_PINCON->PINSEL0 |= (1 << 4); // Set P0.2 as TXD0
-	LPC_PINCON->PINSEL0 &= ~(3 << 6); // Clear P0.3 function bits
-	LPC_PINCON->PINSEL0 |= (1 << 6); // Set P0.3 as RXD0
-
-	UART_CFG_Type UART;
-	UART_ConfigStructInit(&UART);
-	UART_Init((LPC_UART_TypeDef *)LPC_UART0, &UART); // Initialize UART0
-	UART_IntConfig((LPC_UART_TypeDef *)LPC_UART0, UART_INTCFG_RBR, ENABLE); // Enable RBR interrupt
-	NVIC_EnableIRQ(UART0_IRQn);
-	UART_TxCmd((LPC_UART_TypeDef *)LPC_UART0, ENABLE); // Enable UART0 Transmit
-}
-
 void configGPDMA() {
 	GPDMA_Init();
 	GPDMA_Channel_CFG_Type GPDMA;
@@ -379,6 +365,20 @@ void configTimer() {
 	TIM_Cmd(LPC_TIM1, ENABLE);
 	NVIC_EnableIRQ(TIMER0_IRQn);
 	NVIC_EnableIRQ(TIMER1_IRQn);
+}
+
+void configUART() {
+	LPC_PINCON->PINSEL0 &= ~(3 << 4); // Clear P0.2 function bits
+	LPC_PINCON->PINSEL0 |= (1 << 4); // Set P0.2 as TXD0
+	LPC_PINCON->PINSEL0 &= ~(3 << 6); // Clear P0.3 function bits
+	LPC_PINCON->PINSEL0 |= (1 << 6); // Set P0.3 as RXD0
+
+	UART_CFG_Type UART;
+	UART_ConfigStructInit(&UART);
+	UART_Init((LPC_UART_TypeDef *)LPC_UART0, &UART); // Initialize UART0
+	UART_IntConfig((LPC_UART_TypeDef *)LPC_UART0, UART_INTCFG_RBR, ENABLE); // Enable RBR interrupt
+	NVIC_EnableIRQ(UART0_IRQn);
+	UART_TxCmd((LPC_UART_TypeDef *)LPC_UART0, ENABLE); // Enable UART0 Transmit
 }
 
 /*
