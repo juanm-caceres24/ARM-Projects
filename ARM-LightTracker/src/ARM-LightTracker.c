@@ -290,7 +290,6 @@ void configUART() {
 
 void configGPDMA() {
 	GPDMA_Init();
-	// Configure a simple one-shot GPDMA transfer: memory -> DAC peripheral
 	GPDMA_Channel_CFG_Type GPDMA;
 	GPDMA.ChannelNum = GPDMA_CHANNEL_0;
 	GPDMA.TransferSize = 1; // Single word
