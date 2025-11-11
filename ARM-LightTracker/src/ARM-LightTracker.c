@@ -30,6 +30,7 @@
 #define constrain(x, low, high) (((x) < (low)) ? (low) : (((x) > (high)) ? (high) : (x)))
 
 // GPDMA constants
+#define GPDMA_CHANNEL_0 0
 
 // SysTick & Timer constants
 #define SYSTICK_TIME_IN_US 100 // 0.1[ms]
@@ -70,6 +71,7 @@ int static errorSelection = 0; // Variable to select which error to output via D
 int static debounceFlag = 0;
 
 // GPDMA variables
+// (none)
 
 // UART variables
 volatile uint8_t rx_data = 0; // Variable to store received UART data
@@ -286,7 +288,22 @@ void configUART() {
 	UART_TxCmd((LPC_UART_TypeDef *)LPC_UART0, ENABLE); // Enable UART0 Transmit
 }
 
-void configGPDMA() { }
+void configGPDMA() {
+	GPDMA_Init();
+	// Configure a simple one-shot GPDMA transfer: memory -> DAC peripheral
+	GPDMA_Channel_CFG_Type GPDMA;
+	GPDMA.ChannelNum = GPDMA_CHANNEL_0;
+	GPDMA.TransferSize = 1; // Single word
+	GPDMA.TransferWidth = GPDMA_WIDTH_WORD;
+	GPDMA.SrcMemAddr = (uint32_t)&DACValue;
+	GPDMA.DstMemAddr = (uint32_t)&LPC_DAC->DACR; // Destination peripheral address
+	GPDMA.TransferType = GPDMA_TRANSFERTYPE_M2P;
+	GPDMA.SrcConn = 0; // Memory
+	GPDMA.DstConn = GPDMA_CONN_DAC; // DAC peripheral connection
+	GPDMA.DMALLI = 0;
+	GPDMA_Setup(&GPDMA);
+	NVIC_EnableIRQ(DMA_IRQn);
+}
 
 void configGPIO() {
 	LPC_PINCON->PINSEL4 &= ~(3 << 0); // Set P2.0 as GPIO
@@ -385,7 +402,10 @@ void ADC_IRQHandler() {
 	}
 }
 
-void DMA_IRQHandler() { }
+void DMA_IRQHandler() {
+	GPDMA_ClearIntPending(GPDMA_STATCLR_INTTC, GPDMA_CHANNEL_0); // Clear terminal count interrupt for channel 0
+	GPDMA_ChannelCmd(GPDMA_CHANNEL_0, DISABLE); // Disable channel after one-shot transfer
+}
 
 void EINT0_IRQHandler() {
 	if (debounceFlag == 0) {
@@ -519,13 +539,11 @@ void UART0_IRQHandler(void) {
 					joystickSize++;
 					break;
 			}
-			// If this is the first byte received, reset index to start playback
-			if (joystickSize == 1) {
+			if (joystickSize == 1) { // If this is the first byte received, reset index to start playback
 				joystickIndex = 0;
 				joystickCounter = 0;
 			}
-		} else {
-			// Buffer full: ignore further bytes or optionally wrap — here we ignore and echo error
+		} else { // If buffer is full ignore further bytes or optionally wrap
 			UART_SendString((uint8_t *)"EOB"); // End Of Buffer
 		}
 	}
@@ -547,7 +565,6 @@ void processThrottleAndDirection() {
 		motorDirection_0 = 1; // Left
 	}
 	motorThrottle_0 = calculatePID_0(); // Use PID to determine throttle
-
 	int diffUpDown = LDRValue_2 - LDRValue_3;
 	if (diffUpDown > 0) {
 		motorDirection_1 = 0; // Up
