@@ -481,9 +481,6 @@ void UART0_IRQHandler(void) {
 	tmp = intsrc & UART_IIR_INTID_MASK;
 	if (tmp == UART_IIR_INTID_RDA) { // RDA="Receive Data Available"
 		rx_data = UART_ReceiveByte((LPC_UART_TypeDef *)LPC_UART0);
-		/* Store received joystick commands safely (bounds-checked)
-		   Valid received characters: '0'..'4' and '\r' as a separator/end marker
-		   Prevent buffer overflow by checking joystickSize against buffer capacity */
 		if (joystickSize < (int)(sizeof(joystickBuffer) / sizeof(joystickBuffer[0]))) {
 			switch (rx_data) {
 				case '0': // No movement
@@ -522,7 +519,7 @@ void UART0_IRQHandler(void) {
 					joystickSize++;
 					break;
 			}
-			/* If this is the first byte received, reset index to start playback */
+			// If this is the first byte received, reset index to start playback
 			if (joystickSize == 1) {
 				joystickIndex = 0;
 				joystickCounter = 0;
