@@ -20,6 +20,7 @@
 
 #include <cr_section_macros.h>
 
+#include "lpc17xx_gpdma.h"
 #include "lpc17xx_timer.h"
 #include "lpc17xx_uart.h"
 
@@ -27,6 +28,8 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define constrain(x, low, high) (((x) < (low)) ? (low) : (((x) > (high)) ? (high) : (x)))
+
+// GPDMA constants
 
 // SysTick & Timer constants
 #define SYSTICK_TIME_IN_US 100 // 0.1[ms]
@@ -38,6 +41,7 @@
 
 // General constants
 #define MAX_THROTTLE 64 // Maximum throttle level
+#define JOYSTICK_BUFFER_SIZE 1024 // Size of the joystick buffer
 
 // PID 0 constants
 #define KP_0 0.03 // Proportional gain for the control algorithm
@@ -65,12 +69,14 @@ int static errorSelection = 0; // Variable to select which error to output via D
 // EINT variables
 int static debounceFlag = 0;
 
+// GPDMA variables
+
 // UART variables
 volatile uint8_t rx_data = 0; // Variable to store received UART data
 
 // General variables
-int static modeSelection = 0; // 0=LDRs mode, 1=joystick mode, 2=replay mode
-int static joystickBuffer[1024]; // List of characters received by UART
+int static modeSelection = 0; // 0=LDRs mode, 1=joystick mode
+int static joystickBuffer[JOYSTICK_BUFFER_SIZE]; // List of characters received by UART
 int static joystickCounter = 0; // Counter for joystick cycles
 int static joystickIndex = 0; // Current reading index in joystickBuffer
 int static joystickSize = 0; // Number of entries stored in joystickBuffer
@@ -181,8 +187,6 @@ int main() {
 				processThrottleAndDirection();
 				updateMotor0();
 				updateMotor1();
-				break;
-			case 2: // Replay mode
 				break;
 			default:
 				break;
@@ -420,13 +424,9 @@ void EINT2_IRQHandler() {
 void EINT3_IRQHandler() {
 	if (debounceFlag == 0) {
 		debounceFlag = 1; // Load the debounce counter
-		if (modeSelection != 2) {
-			modeSelection = 2; // Switch to replay mode
-			NVIC_DisableIRQ(ADC_IRQn); // Disable ADC interruptions in replay mode
-		} else {
-			modeSelection = 0; // Switch to LDRs mode
-			NVIC_EnableIRQ(ADC_IRQn); // Enable ADC interruptions in LDRs mode
-		}
+
+		// - NOT USED -
+		
 		TIM_Cmd(LPC_TIM0, ENABLE); // Start of TIMER 0
 	}
 	LPC_SC->EXTINT |= (1 << 3); // Enable the interruption again
@@ -525,7 +525,7 @@ void UART0_IRQHandler(void) {
 				joystickCounter = 0;
 			}
 		} else {
-			/* Buffer full: ignore further bytes or optionally wrap — here we ignore and echo error */
+			// Buffer full: ignore further bytes or optionally wrap — here we ignore and echo error
 			UART_SendString((uint8_t *)"EOB"); // End Of Buffer
 		}
 	}
