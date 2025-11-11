@@ -32,7 +32,7 @@
 #define SYSTICK_TIME_IN_US 100 // 0.1[ms]
 #define TIMER_TIME_IN_US 10000 // 10[ms]
 #define PWM_CYCLES 100 // Number of SYSTICK_TIME_IN_US to consider a PWM cycle (100 * 0.1[ms] = 10[ms])
-#define JOYSTICK_CYCLES 1000; // Number of SYSTICK_TIME_IN_US to achieve a movement in joystick mode (1000 * 0.1[ms] = 100[ms])
+#define JOYSTICK_CYCLES 1000 // Number of SYSTICK_TIME_IN_US to achieve a movement in joystick mode (1000 * 0.1[ms] = 100[ms])
 #define MATCH_VALUE_DEBOUNCE 20 // Number of TIMER_TIME_IN_US to achieve debounce (20 * 10[ms] = 200[ms])
 #define MATCH_VALUE_DAC 1 // Number of TIMER_TIME_IN_US to achieve DAC update rate (1 * 10[ms] = 10[ms])
 
@@ -55,8 +55,8 @@
 int static modeSelection = 0; // 0=LDRs mode, 1=joystick mode, 2=replay mode
 int static joystickBuffer[1024]; // List of characters received by UART
 int static joystickCounter = 0; // Counter for joystick cycles
-int static joystickIndex = 0;
-int static joystickSize = -1;
+int static joystickIndex = 0; // Current reading index in joystickBuffer
+int static joystickSize = 0; // Number of entries stored in joystickBuffer
 
 // ADC variables
 int static LDRValue_0;
@@ -443,14 +443,17 @@ void SysTick_Handler() {
 	}
 	if (joystickCounter > 0) { // Decrease joystick counter if it's active
 		joystickCounter--; // Decrease counter
-		if (joystickCounter < 0) { // When counter reaches zero, move to next joystick command
+		if (joystickCounter == 0) { // When counter reaches zero, move to next joystick command
 			joystickIndex++; // Move to next joystick command
-			if (joystickIndex > joystickSize) { // If the end of the joystick buffer is reached
-				joystickIndex = 0; // Restart from beginning
-				joystickSize = -1; // Reset size to wait for new data
+			if (joystickSize > 0 && joystickIndex >= joystickSize) { // End of stored commands reached
+				joystickSize = 0; // Clear buffer
+				joystickIndex = 0; // Reset index
+				for (int i = 0; i < (int)(sizeof(joystickBuffer) / sizeof(joystickBuffer[0])); i++) {
+					joystickBuffer[i] = 0; // Clear buffer contents
+				}
 			}
 		}
-	} else { // If joystick counter is not active, check if we can load it
+	} else { // If joystick counter is not active, check if it have movements to process
 		if (joystickIndex >= 0) { // If there is a valid joystick command to process
 			joystickCounter = JOYSTICK_CYCLES; // Load joystick counter
 		}
@@ -478,37 +481,55 @@ void UART0_IRQHandler(void) {
 	tmp = intsrc & UART_IIR_INTID_MASK;
 	if (tmp == UART_IIR_INTID_RDA) { // RDA="Receive Data Available"
 		rx_data = UART_ReceiveByte((LPC_UART_TypeDef *)LPC_UART0);
-		switch (rx_data) {
-			case '1':
-				UART_SendString((uint8_t *)"1");
-				joystickBuffer[joystickSize] = 1;
-				joystickSize++;
-				break;
-			case '2':
-				UART_SendString((uint8_t *)"2");
-				joystickBuffer[joystickSize] = 2;
-				joystickSize++;
-				break;
-			case '3':
-				UART_SendString((uint8_t *)"3");
-				joystickBuffer[joystickSize] = 3;
-				joystickSize++;
-				break;
-			case '4':
-				UART_SendString((uint8_t *)"4");
-				joystickBuffer[joystickSize] = 4;
-				joystickSize++;
-				break;
-			case '\r':
-				UART_SendString((uint8_t *)"return");
-				joystickBuffer[joystickSize] = 0;
-				joystickSize++;
-				break;
-			default:
-				UART_SendString((uint8_t *)"error");
-				joystickBuffer[joystickSize] = 0;
-				joystickSize++;
-				break;
+		/* Store received joystick commands safely (bounds-checked)
+		   Valid received characters: '0'..'4' and '\r' as a separator/end marker
+		   Prevent buffer overflow by checking joystickSize against buffer capacity */
+		if (joystickSize < (int)(sizeof(joystickBuffer) / sizeof(joystickBuffer[0]))) {
+			switch (rx_data) {
+				case '0': // No movement
+					UART_SendString((uint8_t *)"0");
+					joystickBuffer[joystickSize] = 0;
+					joystickSize++;
+					break;
+				case '1':
+					UART_SendString((uint8_t *)"1");
+					joystickBuffer[joystickSize] = 1;
+					joystickSize++;
+					break;
+				case '2':
+					UART_SendString((uint8_t *)"2");
+					joystickBuffer[joystickSize] = 2;
+					joystickSize++;
+					break;
+				case '3':
+					UART_SendString((uint8_t *)"3");
+					joystickBuffer[joystickSize] = 3;
+					joystickSize++;
+					break;
+				case '4':
+					UART_SendString((uint8_t *)"4");
+					joystickBuffer[joystickSize] = 4;
+					joystickSize++;
+					break;
+				case '\r': // End of command
+					UART_SendString((uint8_t *)"r");
+					joystickBuffer[joystickSize] = 0;
+					joystickSize++;
+					break;
+				default: // Invalid character received
+					UART_SendString((uint8_t *)"e");
+					joystickBuffer[joystickSize] = 0;
+					joystickSize++;
+					break;
+			}
+			/* If this is the first byte received, reset index to start playback */
+			if (joystickSize == 1) {
+				joystickIndex = 0;
+				joystickCounter = 0;
+			}
+		} else {
+			/* Buffer full: ignore further bytes or optionally wrap — here we ignore and echo error */
+			UART_SendString((uint8_t *)"EOB"); // End Of Buffer
 		}
 	}
 }
