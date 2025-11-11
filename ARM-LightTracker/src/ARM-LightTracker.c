@@ -51,26 +51,29 @@
 #define KD_1 0.000015 // Derivative gain for the control algorithm
 #define WINDUP_LIMIT_1 1000 // Integral windup limit for Motor 1
 
-// General variables
-int static modeSelection = 0; // 0=LDRs mode, 1=joystick mode, 2=replay mode
-int static joystickBuffer[1024]; // List of characters received by UART
-int static joystickCounter = 0; // Counter for joystick cycles
-int static joystickIndex = 0; // Current reading index in joystickBuffer
-int static joystickSize = 0; // Number of entries stored in joystickBuffer
-
 // ADC variables
 int static LDRValue_0;
 int static LDRValue_1;
 int static LDRValue_2;
 int static LDRValue_3;
 
-// EINT variables
-int static debounceFlag = 0;
-
 // DAC variables
 int static DACValue = 0; // Value to output via DAC
 int static DACUpdateFlag = 0; // Flag to indicate when to update the DAC output
 int static errorSelection = 0; // Variable to select which error to output via DAC
+
+// EINT variables
+int static debounceFlag = 0;
+
+// UART variables
+volatile uint8_t rx_data = 0; // Variable to store received UART data
+
+// General variables
+int static modeSelection = 0; // 0=LDRs mode, 1=joystick mode, 2=replay mode
+int static joystickBuffer[1024]; // List of characters received by UART
+int static joystickCounter = 0; // Counter for joystick cycles
+int static joystickIndex = 0; // Current reading index in joystickBuffer
+int static joystickSize = 0; // Number of entries stored in joystickBuffer
 
 // Motor 0 variables
 int static motorEnable_0 = 0; // Enable state of Motor 0 (0=off, 1=on)
@@ -102,9 +105,6 @@ double static integral_1 = 0; // Integral term for Motor 1 control
 double static derivative_1 = 0; // Derivative term for Motor 1 control
 double static output_1 = 0; // PID output for Motor 1 control
 
-// UART variables
-volatile uint8_t rx_data = 0; // Variable to store received UART data
-
 void configADC();
 void configDAC();
 void configEINT();
@@ -128,7 +128,7 @@ int main() {
 	configDAC();
 	configEINT();
 	configUART();
-	//configGPDMA();
+	configGPDMA();
 	configGPIO();
 	configSysTick();
 	configTimer();
