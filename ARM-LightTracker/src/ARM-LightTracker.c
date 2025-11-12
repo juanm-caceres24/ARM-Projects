@@ -31,18 +31,17 @@
 
 // GPDMA constants
 #define GPDMA_CHANNEL_0 0
+#define GPDMA_BUFFER_SIZE 1024
 
 // SysTick & Timer constants
 #define SYSTICK_TIME_IN_US 100 // 0.1[ms]
 #define TIMER_TIME_IN_US 10000 // 10[ms]
 #define PWM_CYCLES 100 // Number of SYSTICK_TIME_IN_US to consider a PWM cycle (100 * 0.1[ms] = 10[ms])
-#define JOYSTICK_CYCLES 1000 // Number of SYSTICK_TIME_IN_US to achieve a movement in joystick mode (1000 * 0.1[ms] = 100[ms])
 #define MATCH_VALUE_DEBOUNCE 20 // Number of TIMER_TIME_IN_US to achieve debounce (20 * 10[ms] = 200[ms])
 #define MATCH_VALUE_DAC 1 // Number of TIMER_TIME_IN_US to achieve DAC update rate (1 * 10[ms] = 10[ms])
 
 // General constants
 #define MAX_THROTTLE 64 // Maximum throttle level
-#define JOYSTICK_BUFFER_SIZE 1024 // Size of the joystick buffer
 
 // PID 0 constants
 #define KP_0 0.03 // Proportional gain for the control algorithm
@@ -71,17 +70,16 @@ int static errorSelection = 0; // Variable to select which error to output via D
 int static debounceFlag = 0;
 
 // GPDMA variables
-// (none)
+int static GPDMABuffer[GPDMA_BUFFER_SIZE]; // Buffer to store the received joystick data
+int static GPDMAMovement = 0; // Current movement being processed
+int static GPDMASize = 0; // Size of the received joystick data
+GPDMA_LLI_Type static LLI;
 
 // UART variables
-volatile uint8_t rx_data = 0; // Variable to store received UART data
+volatile uint8_t rxData = 0; // Variable to store received UART data
 
 // General variables
 int static modeSelection = 0; // 0=LDRs mode, 1=joystick mode
-int static joystickBuffer[JOYSTICK_BUFFER_SIZE]; // List of characters received by UART
-int static joystickCounter = 0; // Counter for joystick cycles
-int static joystickIndex = 0; // Current reading index in joystickBuffer
-int static joystickSize = 0; // Number of entries stored in joystickBuffer
 
 // Motor 0 variables
 int static motorEnable_0 = 0; // Enable state of Motor 0 (0=off, 1=on)
@@ -148,7 +146,7 @@ int main() {
 				updateMotor1();
 				break;
 			case 1: // Joystick mode
-				switch (joystickBuffer[joystickIndex]) {
+				switch (GPDMAMovement) {
 					case 0: // No movement
 						LDRValue_0 = 0;
 						LDRValue_1 = 0;
@@ -275,18 +273,24 @@ void configEINT() {
 }
 
 void configGPDMA() {
-	GPDMA_Init();
 	GPDMA_Channel_CFG_Type GPDMA;
 	GPDMA.ChannelNum = GPDMA_CHANNEL_0;
-	GPDMA.TransferSize = 1; // Single word
+	GPDMA.TransferSize = GPDMASize; // Size of the received joystick data
 	GPDMA.TransferWidth = GPDMA_WIDTH_WORD;
-	GPDMA.SrcMemAddr = (uint32_t)&DACValue;
-	GPDMA.DstMemAddr = (uint32_t)&LPC_DAC->DACR; // Destination peripheral address
-	GPDMA.TransferType = GPDMA_TRANSFERTYPE_M2P;
-	GPDMA.SrcConn = 0; // Memory
-	GPDMA.DstConn = GPDMA_CONN_DAC; // DAC peripheral connection
-	GPDMA.DMALLI = 0;
+	GPDMA.SrcMemAddr = (uint32_t)&GPDMABuffer; // Source memory address
+	GPDMA.DstMemAddr = (uint32_t)&GPDMAMovement; // Destination memory address
+	GPDMA.TransferType = GPDMA_TRANSFERTYPE_M2M;
+	GPDMA.SrcConn = 0;
+	GPDMA.DstConn = 0;
+	GPDMA.DMALLI = (uint32_t)&LLI;
 	GPDMA_Setup(&GPDMA);
+
+	LLI.SrcAddr = (uint32_t)&GPDMABuffer;
+	LLI.DstAddr = (uint32_t)&GPDMAMovement;
+	LLI.NextLLI = 0;
+	LLI.Control = ((GPDMASize & 0xFFF) << 0) | (GPDMA_WIDTH_WORD << 12) | (GPDMA_WIDTH_WORD << 15) | (1 << 18) | (1 << 21);
+
+	GPDMA_Init();
 	NVIC_EnableIRQ(DMA_IRQn);
 }
 
@@ -460,23 +464,6 @@ void SysTick_Handler() {
 	if (pwmCounter_1 >= PWM_CYCLES) {
 		pwmCounter_1 = 0; // Reset the PWM counter after a full cycle
 	}
-	if (joystickCounter > 0) { // Decrease joystick counter if it's active
-		joystickCounter--; // Decrease counter
-		if (joystickCounter == 0) { // When counter reaches zero, move to next joystick command
-			joystickIndex++; // Move to next joystick command
-			if (joystickSize > 0 && joystickIndex >= joystickSize) { // End of stored commands reached
-				joystickSize = 0; // Clear buffer
-				joystickIndex = 0; // Reset index
-				for (int i = 0; i < (int)(sizeof(joystickBuffer) / sizeof(joystickBuffer[0])); i++) {
-					joystickBuffer[i] = 0; // Clear buffer contents
-				}
-			}
-		}
-	} else { // If joystick counter is not active, check if it have movements to process
-		if (joystickIndex >= 0) { // If there is a valid joystick command to process
-			joystickCounter = JOYSTICK_CYCLES; // Load joystick counter
-		}
-	}
 }
 
 void TIMER0_IRQHandler() {
@@ -499,48 +486,44 @@ void UART0_IRQHandler(void) {
 	intsrc = UART_GetIntId((LPC_UART_TypeDef *)LPC_UART0);
 	tmp = intsrc & UART_IIR_INTID_MASK;
 	if (tmp == UART_IIR_INTID_RDA) { // RDA="Receive Data Available"
-		rx_data = UART_ReceiveByte((LPC_UART_TypeDef *)LPC_UART0);
-		if (joystickSize < (int)(sizeof(joystickBuffer) / sizeof(joystickBuffer[0]))) {
-			switch (rx_data) {
+		rxData = UART_ReceiveByte((LPC_UART_TypeDef *)LPC_UART0);
+		if (GPDMASize < (int)(sizeof(GPDMABuffer) / sizeof(GPDMABuffer[0]))) {
+			switch (rxData) {
 				case '0': // No movement
 					UARTSendString((uint8_t *)"0");
-					joystickBuffer[joystickSize] = 0;
-					joystickSize++;
+					GPDMABuffer[GPDMASize] = 0;
+					GPDMASize++;
 					break;
 				case '1':
 					UARTSendString((uint8_t *)"1");
-					joystickBuffer[joystickSize] = 1;
-					joystickSize++;
+					GPDMABuffer[GPDMASize] = 1;
+					GPDMASize++;
 					break;
 				case '2':
 					UARTSendString((uint8_t *)"2");
-					joystickBuffer[joystickSize] = 2;
-					joystickSize++;
+					GPDMABuffer[GPDMASize] = 2;
+					GPDMASize++;
 					break;
 				case '3':
 					UARTSendString((uint8_t *)"3");
-					joystickBuffer[joystickSize] = 3;
-					joystickSize++;
+					GPDMABuffer[GPDMASize] = 3;
+					GPDMASize++;
 					break;
 				case '4':
 					UARTSendString((uint8_t *)"4");
-					joystickBuffer[joystickSize] = 4;
-					joystickSize++;
+					GPDMABuffer[GPDMASize] = 4;
+					GPDMASize++;
 					break;
 				case '\r': // End of command
 					UARTSendString((uint8_t *)"r");
-					joystickBuffer[joystickSize] = 0;
-					joystickSize++;
+					GPDMABuffer[GPDMASize] = 0;
+					GPDMASize++;
 					break;
 				default: // Invalid character received
 					UARTSendString((uint8_t *)"e");
-					joystickBuffer[joystickSize] = 0;
-					joystickSize++;
+					GPDMABuffer[GPDMASize] = 0;
+					GPDMASize++;
 					break;
-			}
-			if (joystickSize == 1) { // If this is the first byte received, reset index to start playback
-				joystickIndex = 0;
-				joystickCounter = 0;
 			}
 		} else { // If buffer is full ignore further bytes or optionally wrap
 			UARTSendString((uint8_t *)"EOB"); // End Of Buffer
