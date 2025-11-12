@@ -122,7 +122,7 @@ void configSysTick();
 void configTimer();
 void configUART();
 
-void UART_SendString(uint8_t *str);
+void UARTSendString(uint8_t *str);
 void processThrottleAndDirection();
 int calculatePID_0();
 int calculatePID_1();
@@ -503,37 +503,37 @@ void UART0_IRQHandler(void) {
 		if (joystickSize < (int)(sizeof(joystickBuffer) / sizeof(joystickBuffer[0]))) {
 			switch (rx_data) {
 				case '0': // No movement
-					UART_SendString((uint8_t *)"0");
+					UARTSendString((uint8_t *)"0");
 					joystickBuffer[joystickSize] = 0;
 					joystickSize++;
 					break;
 				case '1':
-					UART_SendString((uint8_t *)"1");
+					UARTSendString((uint8_t *)"1");
 					joystickBuffer[joystickSize] = 1;
 					joystickSize++;
 					break;
 				case '2':
-					UART_SendString((uint8_t *)"2");
+					UARTSendString((uint8_t *)"2");
 					joystickBuffer[joystickSize] = 2;
 					joystickSize++;
 					break;
 				case '3':
-					UART_SendString((uint8_t *)"3");
+					UARTSendString((uint8_t *)"3");
 					joystickBuffer[joystickSize] = 3;
 					joystickSize++;
 					break;
 				case '4':
-					UART_SendString((uint8_t *)"4");
+					UARTSendString((uint8_t *)"4");
 					joystickBuffer[joystickSize] = 4;
 					joystickSize++;
 					break;
 				case '\r': // End of command
-					UART_SendString((uint8_t *)"r");
+					UARTSendString((uint8_t *)"r");
 					joystickBuffer[joystickSize] = 0;
 					joystickSize++;
 					break;
 				default: // Invalid character received
-					UART_SendString((uint8_t *)"e");
+					UARTSendString((uint8_t *)"e");
 					joystickBuffer[joystickSize] = 0;
 					joystickSize++;
 					break;
@@ -543,7 +543,7 @@ void UART0_IRQHandler(void) {
 				joystickCounter = 0;
 			}
 		} else { // If buffer is full ignore further bytes or optionally wrap
-			UART_SendString((uint8_t *)"EOB"); // End Of Buffer
+			UARTSendString((uint8_t *)"EOB"); // End Of Buffer
 		}
 	}
 }
@@ -552,7 +552,7 @@ void UART0_IRQHandler(void) {
  * GENERAL METHODS
  */
 
-void UART_SendString(uint8_t *str) {
+void UARTSendString(uint8_t *str) {
 	UART_Send((LPC_UART_TypeDef *)LPC_UART0, str, strlen((char *)str), BLOCKING);
 }
 
