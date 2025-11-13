@@ -640,5 +640,6 @@ void updateDAC() {
 	} else {
 		DACValue = constrain((int)(error_1 + 512), 0, 1023); // Output error_1 centered at 512
 	}
-	LPC_DAC->DACR = (DACValue << 6); // Update DAC output
+	LPC_DAC->DACR &= ~(1023 << 6); // Clear DAC output
+	LPC_DAC->DACR |= (DACValue << 6); // Update DAC output
 }
