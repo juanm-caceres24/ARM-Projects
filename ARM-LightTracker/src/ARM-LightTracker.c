@@ -20,6 +20,7 @@
 
 #include <cr_section_macros.h>
 
+#include "lpc17xx_dac.h"
 #include "lpc17xx_gpdma.h"
 #include "lpc17xx_timer.h"
 #include "lpc17xx_uart.h"
@@ -63,7 +64,7 @@ int static LDRValue_2;
 int static LDRValue_3;
 
 // DAC variables
-int static DACValue = 0; // Value to output via DAC
+uint32_t static DACValue = 0; // Value to output via DAC
 int static DACUpdateFlag = 0; // Flag to indicate when to update the DAC output
 int static errorSelection = 0; // Variable to select which error to output via DAC
 
@@ -156,28 +157,28 @@ int main() {
 						LDRValue_3 = 0;
 						break;
 					case 1: // Right
-						LDRValue_0 = 800;
+						LDRValue_0 = 1024;
 						LDRValue_1 = 0;
 						LDRValue_2 = 0;
 						LDRValue_3 = 0;
 						break;
 					case 2: // Left
 						LDRValue_0 = 0;
-						LDRValue_1 = 800;
+						LDRValue_1 = 1024;
 						LDRValue_2 = 0;
 						LDRValue_3 = 0;
 						break;
 					case 3: // Up
 						LDRValue_0 = 0;
 						LDRValue_1 = 0;
-						LDRValue_2 = 800;
+						LDRValue_2 = 1024;
 						LDRValue_3 = 0;
 						break;
 					case 4: // Down
 						LDRValue_0 = 0;
 						LDRValue_1 = 0;
 						LDRValue_2 = 0;
-						LDRValue_3 = 800;
+						LDRValue_3 = 1024;
 						break;
 					default: // Error
 						LDRValue_0 = 0;
@@ -195,6 +196,7 @@ int main() {
 		}
 		if (DACUpdateFlag == 1) {
 			updateDAC();
+			configGPDMA();
 			DACUpdateFlag = 0;
 		}
 	}
@@ -229,10 +231,9 @@ void configDAC() {
 	LPC_PINCON->PINSEL1 |= (2 << 20); // Set P0.26 as AOUT
 	LPC_PINCON->PINMODE1 |= (3 << 20); // Set P0.26 with PULL_DOWN
 
-	LPC_SC->PCONP |= (1 << 15); // Power up DAC
-	LPC_DAC->DACCTRL = 0x00; // Disable DMA and bias
-	LPC_DAC->DACCNTVAL = 0; // No timeout
 	LPC_DAC->DACR |= (1 << 16); // Set bias in 400kHz
+	LPC_DAC->DACCTRL |= (12 << 0); // Enable DMA & timeout
+	LPC_DAC->DACCNTVAL |= 250000;
 
 	LPC_DAC->DACR &= ~(1023 << 6); // Set the P0.26 DAC output in LOW
 }
@@ -281,14 +282,14 @@ void configGPDMA() {
 	GPDMA.ChannelNum = GPDMA_CHANNEL_0;
 	GPDMA.TransferSize = 1; // Single word
 	GPDMA.TransferWidth = GPDMA_WIDTH_WORD;
-	GPDMA.SrcMemAddr = (uint32_t)&DACValue;
-	GPDMA.DstMemAddr = (uint32_t)&LPC_DAC->DACR; // Destination peripheral address
+	GPDMA.SrcMemAddr = (uint32_t)DACValue;
+	GPDMA.DstMemAddr = 0; // Destination peripheral address
 	GPDMA.TransferType = GPDMA_TRANSFERTYPE_M2P;
 	GPDMA.SrcConn = 0; // Memory
 	GPDMA.DstConn = GPDMA_CONN_DAC; // DAC peripheral connection
 	GPDMA.DMALLI = 0;
 	GPDMA_Setup(&GPDMA);
-	NVIC_EnableIRQ(DMA_IRQn);
+	//NVIC_EnableIRQ(DMA_IRQn);
 }
 
 void configGPIO() {
@@ -404,7 +405,6 @@ void ADC_IRQHandler() {
 
 void DMA_IRQHandler() {
 	GPDMA_ClearIntPending(GPDMA_STATCLR_INTTC, GPDMA_CHANNEL_0); // Clear terminal count interrupt for channel 0
-	GPDMA_ChannelCmd(GPDMA_CHANNEL_0, DISABLE); // Disable channel after one-shot transfer
 }
 
 void EINT0_IRQHandler() {
@@ -468,7 +468,7 @@ void SysTick_Handler() {
 			if (joystickSize > 0 && joystickIndex >= joystickSize) { // End of stored commands reached
 				joystickSize = 0; // Clear buffer
 				joystickIndex = 0; // Reset index
-				for (int i = 0; i < (int)(sizeof(joystickBuffer) / sizeof(joystickBuffer[0])); i++) {
+				for (int i = 0; i < JOYSTICK_BUFFER_SIZE; i++) {
 					joystickBuffer[i] = 0; // Clear buffer contents
 				}
 			}
@@ -501,7 +501,7 @@ void UART0_IRQHandler(void) {
 	tmp = intsrc & UART_IIR_INTID_MASK;
 	if (tmp == UART_IIR_INTID_RDA) { // RDA="Receive Data Available"
 		rx_data = UART_ReceiveByte((LPC_UART_TypeDef *)LPC_UART0);
-		if (joystickSize < (int)(sizeof(joystickBuffer) / sizeof(joystickBuffer[0]))) {
+		if (joystickSize < JOYSTICK_BUFFER_SIZE) {
 			switch (rx_data) {
 				case '0': // No movement
 					UARTSendString((uint8_t *)"0");
@@ -640,6 +640,5 @@ void updateDAC() {
 	} else {
 		DACValue = constrain((int)(error_1 + 512), 0, 1023); // Output error_1 centered at 512
 	}
-	LPC_DAC->DACR &= ~(1023 << 6); // Clear DAC output
-	LPC_DAC->DACR |= (DACValue << 6); // Update DAC output
+	GPDMA_ChannelCmd(GPDMA_CHANNEL_0, ENABLE); // Start GPDMA transfer to update DAC
 }
